@@ -5,12 +5,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/gorilla/schema"
 	"github.com/iurikman/smartSurvey/internal/models"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	StandardPage int = 10
 )
 
 type HTTPResponse struct {
@@ -18,11 +25,7 @@ type HTTPResponse struct {
 	Error string `json:"error"`
 }
 
-type TransferResponse struct {
-	TransactionID uuid.UUID `json:"transactionId"`
-}
-
-type service interface {
+type service interface { //nolint:interfacebloat
 	CreateUser(ctx context.Context, user models.User) (*models.User, error)
 	GetUsers(ctx context.Context, params models.GetParams) ([]*models.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
@@ -33,7 +36,8 @@ type service interface {
 	UpdateCompany(ctx context.Context, company models.Company) (*models.Company, error)
 	UploadFile(ctx context.Context, file models.FileDTO) (*models.File, error)
 	GetFile(ctx context.Context, fileName string, fileID uuid.UUID) (*models.File, error)
-	DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error
+	GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error)
+	DeleteFile(ctx context.Context, bucketName, fileName string) error
 }
 
 func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +45,11 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	var file models.File
 
-	_ = json.NewDecoder(r.Body).Decode(&file)
+	if err := json.NewDecoder(r.Body).Decode(&file); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
+
+		return
+	}
 
 	fileDTO := models.FileDTO{
 		Name:   file.Name,
@@ -51,7 +59,8 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	uploadedFileData, err := s.service.UploadFile(r.Context(), fileDTO)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, err.Error())
+		log.Warnf("s.service.UploadFile(r.Context(), fileDTO) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
@@ -60,7 +69,7 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
-	bucketName := r.URL.Query().Get("bucketname")
+	bucketName := r.URL.Query().Get("bucketName")
 	fileID := chi.URLParam(r, "id")
 
 	id, err := uuid.Parse(fileID)
@@ -70,12 +79,42 @@ func (s *Server) getFile(w http.ResponseWriter, r *http.Request) {
 
 	file, err := s.service.GetFile(r.Context(), bucketName, id)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "s.service.GetFile(r.Context(), bucketName, id) err: %w")
+		log.Warnf("s.service.GetFile(r.Context(), bucketName, id) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
 
 	writeOkResponse(w, http.StatusOK, file)
+}
+
+func (s *Server) getBucketFiles(w http.ResponseWriter, r *http.Request) {
+	bucketName := chi.URLParam(r, "bucketName")
+
+	files, err := s.service.GetBucketFiles(r.Context(), bucketName)
+	if err != nil {
+		log.Warnf("s.service.GetBucketFiles(r.Context(), bucketName) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
+
+		return
+	}
+
+	writeOkResponse(w, http.StatusOK, files)
+}
+
+func (s *Server) deleteFile(w http.ResponseWriter, r *http.Request) {
+	bucketName := r.URL.Query().Get("bucketName")
+	fileID := chi.URLParam(r, "id")
+
+	err := s.service.DeleteFile(r.Context(), bucketName, fileID)
+	if err != nil {
+		log.Warnf("s.service.DeleteFile(r.Context(), bucketName, fileID) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
+
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) createCompany(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +143,8 @@ func (s *Server) createCompany(w http.ResponseWriter, r *http.Request) {
 
 		return
 	case err != nil:
-		writeErrorResponse(w, http.StatusInternalServerError, "s.service.CreateCompany(r.Context(), rCompany)")
+		log.Warnf("s.service.CreateCompany(r.Context(), rCompany) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
@@ -113,7 +153,7 @@ func (s *Server) createCompany(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getCompanies(w http.ResponseWriter, r *http.Request) {
-	params, err := models.ParseParams(r.URL.Query())
+	params, err := ParseParams(r.URL.Query())
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, err.Error())
 
@@ -122,7 +162,8 @@ func (s *Server) getCompanies(w http.ResponseWriter, r *http.Request) {
 
 	companies, err := s.service.GetCompanies(r.Context(), *params)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "s.service.GetCompanies(r.Context(), params)")
+		log.Warnf("s.service.GetCompanies(r.Context(), *params) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
@@ -149,7 +190,8 @@ func (s *Server) updateCompany(w http.ResponseWriter, r *http.Request) {
 
 		return
 	case err != nil:
-		writeErrorResponse(w, http.StatusInternalServerError, "s.service.updateCompany(r.Context(), rCompany)")
+		log.Warnf("s.service.UpdateCompany(r.Context(), rCompany) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
@@ -169,20 +211,15 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	user, err := s.service.CreateUser(r.Context(), rUser)
 
 	switch {
-	case errors.Is(err, models.ErrUserNameIsEmpty):
-		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
-
-		return
-	case errors.Is(err, models.ErrEmailIsEmpty):
-		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
-
-		return
-	case errors.Is(err, models.ErrPhoneIsEmpty):
+	case
+		errors.Is(err, models.ErrUserNameIsEmpty) ||
+			errors.Is(err, models.ErrEmailIsEmpty) ||
+			errors.Is(err, models.ErrPhoneIsEmpty):
 		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
 
 		return
 	case errors.Is(err, models.ErrDuplicateUser):
-		writeErrorResponse(w, http.StatusConflict, "user already exists")
+		writeErrorResponse(w, http.StatusConflict, err.Error())
 
 		return
 	case errors.Is(err, models.ErrCompanyNotFound):
@@ -190,7 +227,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 
 		return
 	case err != nil:
-		log.Warn("s.service.CreateUser(r.Context(), rUser) err")
+		log.Warnf("s.service.CreateUser(r.Context(), rUser) err: %v", err.Error())
 		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
@@ -200,7 +237,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getUsers(w http.ResponseWriter, r *http.Request) {
-	params, err := models.ParseParams(r.URL.Query())
+	params, err := ParseParams(r.URL.Query())
 	if err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, err.Error())
 
@@ -209,7 +246,8 @@ func (s *Server) getUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := s.service.GetUsers(r.Context(), *params)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "error getting users")
+		log.Warnf("s.service.GetUsers(r.Context(), *params) err: %v", err.Error())
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
@@ -220,7 +258,7 @@ func (s *Server) getUsers(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "can`t parse ID")
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
 
 		return
 	}
@@ -229,11 +267,11 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case errors.Is(err, models.ErrUserNotFound):
-		writeErrorResponse(w, http.StatusNotFound, "user not found")
+		writeErrorResponse(w, http.StatusNotFound, err.Error())
 
 		return
 	case err != nil:
-		log.Warn("s.service.GetUserByID(r.Context(), id) err")
+		log.Warnf("s.service.GetUserByID(r.Context(), id) err: %v", err.Error())
 		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
@@ -245,7 +283,7 @@ func (s *Server) getUserByID(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "uuid.Parse(chi.URLParam(r, 'id')) err")
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
 
 		return
 	}
@@ -253,36 +291,36 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 	var updateRequest models.UpdateUserRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&updateRequest); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "json.NewDecoder(r.Body).Decode(&patchRequest) err")
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
+
+		return
 	}
 
 	user, err := s.service.UpdateUser(r.Context(), id, updateRequest)
 
 	switch {
-	case errors.Is(err, models.ErrUserNameIsEmpty):
-		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
-
-		return
-	case errors.Is(err, models.ErrEmailIsEmpty):
+	case errors.Is(err, models.ErrUserNameIsEmpty) || errors.Is(err, models.ErrEmailIsEmpty):
 		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
 
 		return
 	case errors.Is(err, models.ErrUserNotFound):
-		writeErrorResponse(w, http.StatusNotFound, "user not found")
+		writeErrorResponse(w, http.StatusNotFound, err.Error())
 
 		return
 	case errors.Is(err, models.ErrDuplicateUser):
-		writeErrorResponse(w, http.StatusUnprocessableEntity, "duplicate user")
+		writeErrorResponse(w, http.StatusUnprocessableEntity, err.Error())
 
 		return
 	case errors.Is(err, models.ErrNotAllowed):
-		writeErrorResponse(w, http.StatusUnauthorized, "not allowed")
+		writeErrorResponse(w, http.StatusUnauthorized, err.Error())
 
 		return
 	case errors.Is(err, models.ErrEmptyRequest):
-		writeErrorResponse(w, http.StatusBadRequest, "empty request")
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
+
+		return
 	case err != nil:
-		log.Warn("s.service.PatchUser(r.Context(), id, patchRequest) err")
+		log.Warnf("s.service.PatchUser(r.Context(), id, patchRequest) err: %v", err.Error())
 		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
@@ -294,18 +332,18 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "uuid.Parse(chi.URLParam(r, 'id')) err")
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
 	}
 
 	err = s.service.DeleteUser(r.Context(), id)
 
 	switch {
 	case errors.Is(err, models.ErrUserNotFound):
-		writeErrorResponse(w, http.StatusNotFound, "user not found")
+		writeErrorResponse(w, http.StatusNotFound, err.Error())
 
 		return
 	case err != nil:
-		log.Warn("s.service.DeleteUser(r.Context(), id) err")
+		log.Warnf("s.service.DeleteUser(r.Context(), id) err: %v", err.Error())
 		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
@@ -332,4 +370,21 @@ func writeErrorResponse(w http.ResponseWriter, statusCode int, description strin
 	if err != nil {
 		log.Warn("writeErrorResponse/json.NewEncoder(w).Encode(HTTPResponse{Data: data})")
 	}
+}
+
+func ParseParams(value url.Values) (*models.GetParams, error) {
+	decoder := schema.NewDecoder()
+
+	params := &models.GetParams{}
+
+	err := decoder.Decode(params, value)
+	if err != nil {
+		return nil, fmt.Errorf("decoder.Decode(params, value) err: %w", err)
+	}
+
+	if params.Limit == 0 {
+		params.Limit = StandardPage
+	}
+
+	return params, nil
 }

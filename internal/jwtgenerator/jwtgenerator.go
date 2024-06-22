@@ -25,6 +25,8 @@ func NewJWTGenerator() *JWTGenerator {
 	privateKey, err := rsa.GenerateKey(rand.Reader, readerBits)
 	if err != nil {
 		log.Warn("rsa.GenerateKey(rand.Reader, 4096)", err)
+
+		return nil
 	}
 
 	generator := &JWTGenerator{

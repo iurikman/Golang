@@ -6,10 +6,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
-	store2 "github.com/iurikman/smartSurvey/internal/store"
 )
 
-type store interface {
+type db interface {
 	CreateUser(ctx context.Context, user models.User) (*models.User, error)
 	GetUsers(ctx context.Context, params models.GetParams) ([]*models.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
@@ -18,16 +17,21 @@ type store interface {
 	CreateCompany(ctx context.Context, company models.Company) (*models.Company, error)
 	GetCompanies(ctx context.Context, params models.GetParams) ([]*models.Company, error)
 	UpdateCompany(ctx context.Context, company models.Company) (*models.Company, error)
-	// UploadFile(ctx context.Context, file models.File) (*models.File, error)
-	// GetFile(ctx context.Context, file models.File) (*models.File, error)
+}
+
+type fileStore interface {
+	GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error)
+	GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error)
+	UploadFile(ctx context.Context, file *models.File) (*models.File, error)
+	DeleteFile(ctx context.Context, bucketName, fileName string) error
 }
 
 type Service struct {
-	db      store
-	storage store2.Storage
+	db      db
+	storage fileStore
 }
 
-func New(db store, storage store2.Storage) *Service {
+func New(db db, storage fileStore) *Service {
 	return &Service{
 		db:      db,
 		storage: storage,
@@ -39,7 +43,7 @@ func (s *Service) UploadFile(ctx context.Context, fileDTO models.FileDTO) (*mode
 
 	uploadedFileData, err := s.storage.UploadFile(ctx, file)
 	if err != nil {
-		return nil, fmt.Errorf("s.storage.UploadFile(ctx, file.ID, bucketName, file) err: %w", err)
+		return nil, fmt.Errorf("s.storage.uploadFile(ctx, file.ID, bucketName, file) err: %w", err)
 	}
 
 	return uploadedFileData, nil
@@ -48,14 +52,29 @@ func (s *Service) UploadFile(ctx context.Context, fileDTO models.FileDTO) (*mode
 func (s *Service) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error) {
 	file, err := s.storage.GetFile(ctx, bucketName, fileID)
 	if err != nil {
-		return nil, fmt.Errorf("s.storage.GetFile(ctx, bucketName, fileID) err: %w", err)
+		return nil, fmt.Errorf("s.storage.getFile(ctx, bucketName, fileID) err: %w", err)
 	}
 
 	return file, nil
 }
 
-func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error {
-	//TODO implement func
+func (s *Service) GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error) {
+	var files []*models.File
+
+	files, err := s.storage.GetBucketFiles(ctx, bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("s.storage.getBucketFiles(ctx, bucketName) err: %w", err)
+	}
+
+	return files, nil
+}
+
+func (s *Service) DeleteFile(ctx context.Context, bucketName, fileName string) error {
+	err := s.storage.DeleteFile(ctx, bucketName, fileName)
+	if err != nil {
+		return fmt.Errorf("s.storage.deleteFile(ctx, fileID, fileName) err: %w", err)
+	}
+
 	return nil
 }
 

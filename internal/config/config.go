@@ -15,6 +15,11 @@ type Config struct {
 	PGDatabase string `env:"PG_DATABASE" env-default:"postgresdb"`
 	PGUser     string `env:"PG_USER" env-default:"postgres"`
 	PGPassword string `env:"PG_PASSWORD" env-default:"qwerqwer"`
+
+	StorageHost            string `env:"STORAGE_HOST" env-default:"localhost"`
+	StoragePort            string `env:"STORAGE_PORT" env-default:"9000"`
+	StorageAccessKey       string `env:"STORAGE_ACCESS_KEY" env-default:"minio"`
+	StorageSecretAccessKey string `env:"STORAGE_SECRET_ACCESS_KEY" env-default:"qwerqwer"`
 }
 
 func New() Config {

@@ -1,18 +1,14 @@
 package models
 
 import (
-	"fmt"
 	"io"
-	"net/url"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"github.com/gorilla/schema"
 )
 
 const (
-	StandardPage int    = 10
-	UserInfoKey  ctxKey = "userInfo"
+	UserInfoKey ctxKey = "userInfo"
 )
 
 type File struct {
@@ -83,23 +79,6 @@ type GetParams struct {
 type Claims struct {
 	jwt.RegisteredClaims
 	UUID uuid.UUID `json:"uuid"`
-}
-
-func ParseParams(value url.Values) (*GetParams, error) {
-	decoder := schema.NewDecoder()
-
-	params := &GetParams{}
-
-	err := decoder.Decode(params, value)
-	if err != nil {
-		return nil, fmt.Errorf("decoder.Decode(params, value) err: %w", err)
-	}
-
-	if params.Limit == 0 {
-		params.Limit = StandardPage
-	}
-
-	return params, nil
 }
 
 func (c Company) Validate() error {

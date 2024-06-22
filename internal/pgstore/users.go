@@ -1,16 +1,22 @@
-package store
+package pgstore
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+)
+
+const (
+	rowCount = 2
 )
 
 func (p *Postgres) CreateUser(ctx context.Context, user models.User) (*models.User, error) {
@@ -120,6 +126,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User,
 		WHERE id = $1
 		`
 
+	p.db.QueryRow(ctx, query, id)
 	err := p.db.QueryRow(
 		ctx,
 		query,
@@ -146,7 +153,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User,
 }
 
 func (p *Postgres) UpdateUser(ctx context.Context, id uuid.UUID, user models.UpdateUserRequest) (*models.User, error) {
-	changedUser, err := p.GetUserByID(ctx, id)
+	userToBeChanged, err := p.GetUserByID(ctx, id)
 
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
@@ -155,132 +162,60 @@ func (p *Postgres) UpdateUser(ctx context.Context, id uuid.UUID, user models.Upd
 		return nil, fmt.Errorf("error getting user: %w", err)
 	}
 
-	editedFlag := false
+	value := reflect.ValueOf(user)
+	typ := value.Type()
+	queryPart1 := `UPDATE users` + " "
+	queryPart2 := `SET` + " "
+	queryPart3 := `WHERE id = $1 RETURNING id, company, role, name, surname, phone, email, user_type`
+	row := rowCount
 
-	if user.Company != uuid.Nil {
-		editedFlag = true
+	var query string
 
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET company = $2 WHERE id = $1 RETURNING company`,
-			id,
-			user.Company,
-		).Scan(
-			&changedUser.Company,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userCompany: %w", err)
+	queryRowBody := []interface{}{id}
+
+	for i := range make([]struct{}, typ.NumField()) {
+		fieldName := typ.Field(i).Name
+
+		fieldValue := value.Field(i)
+		if !fieldValue.IsZero() && fieldValue.IsValid() {
+			if fieldName == "UserType" {
+				fieldName = "user_type"
+			} else {
+				fieldName = strings.ToLower(fieldName)
+			}
+
+			queryPart2 += fieldName + " = $" + strconv.Itoa(row) + ", "
+			row++
+
+			queryRowBody = append(queryRowBody, fieldValue.Interface())
 		}
 	}
 
-	if user.Role != nil {
-		editedFlag = true
+	if row > rowCount {
+		queryPart1 = strings.TrimSuffix(queryPart1, ", ")
+		queryPart2 = strings.TrimSuffix(queryPart2, ", ")
+		queryPart3 = strings.TrimSuffix(queryPart3, ", ")
+		query = queryPart1 + " " + queryPart2 + " " + queryPart3
 
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET role = $2 WHERE id = $1 RETURNING role`,
-			id,
-			user.Role,
-		).Scan(
-			&changedUser.Role,
+		err = p.db.QueryRow(ctx, query, queryRowBody...).Scan(
+			&userToBeChanged.ID,
+			&userToBeChanged.Company,
+			&userToBeChanged.Role,
+			&userToBeChanged.Name,
+			&userToBeChanged.Surname,
+			&userToBeChanged.Phone,
+			&userToBeChanged.Email,
+			&userToBeChanged.UserType,
 		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userRole: %w", err)
-		}
-	}
 
-	if user.Name != nil {
-		editedFlag = true
-
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET name = $2 WHERE id = $1 RETURNING name`,
-			id,
-			user.Name,
-		).Scan(
-			&changedUser.Name,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userName: %w", err)
-		}
-	}
-
-	if user.Surname != nil {
-		editedFlag = true
-
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET surname = $2 WHERE id = $1 RETURNING surname`,
-			id,
-			user.Surname,
-		).Scan(
-			&changedUser.Surname,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userSurname: %w", err)
-		}
-	}
-
-	if user.Phone != nil {
-		editedFlag = true
-
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET phone = $2 WHERE id = $1 RETURNING phone`,
-			id,
-			user.Phone,
-		).Scan(
-			&changedUser.Phone,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userPhone: %w", err)
-		}
-	}
-
-	if user.Email != nil {
-		editedFlag = true
-
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET email = $2 WHERE id = $1 RETURNING email`,
-			id,
-			user.Email,
-		).Scan(
-			&changedUser.Email,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userEmail: %w", err)
-		}
-	}
-
-	if user.UserType != nil {
-		editedFlag = true
-
-		err := p.db.QueryRow(
-			ctx,
-			`UPDATE users SET user_type = $2 WHERE id = $1 RETURNING user_type`,
-			id,
-			user.UserType,
-		).Scan(
-			&changedUser.UserType,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userUserType: %w", err)
-		}
-	}
-
-	if editedFlag {
-		_, err = p.db.Exec(
-			ctx,
-			`UPDATE users SET updated_at = $2 WHERE id = $1 RETURNING updated_at`,
-			id,
-			time.Now(),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("error updating userUserUpdatedAt: %w", err)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			return nil, models.ErrEmptyRequest
+		case err != nil:
+			return nil, fmt.Errorf("error updating user: %w", err)
 		}
 
-		return changedUser, nil
+		return userToBeChanged, nil
 	}
 
 	return nil, models.ErrEmptyRequest
@@ -288,9 +223,10 @@ func (p *Postgres) UpdateUser(ctx context.Context, id uuid.UUID, user models.Upd
 
 func (p *Postgres) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	query := `
-		DELETE FROM users
-		WHERE id = $1
-		`
+				UPDATE users 
+				SET deleted = true			
+				WHERE id = $1
+			`
 
 	result, err := p.db.Exec(
 		ctx,

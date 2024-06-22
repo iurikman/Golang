@@ -1,4 +1,4 @@
-package minio
+package filestore
 
 import (
 	"bytes"
@@ -9,42 +9,47 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
-	"github.com/iurikman/smartSurvey/internal/store"
+	"github.com/minio/minio-go/v7"
 	log "github.com/sirupsen/logrus"
 )
 
-type minioStorage struct {
+type MinioStorage struct {
 	client *Client
 }
 
-func NewMinioStorage(endpoint, accessKeyID, secretAccessKey string) (store.Storage, error) {
-	client, err := NewClient(endpoint, accessKeyID, secretAccessKey)
+func NewMinioStorage(endpoint, accessKeyID, secretAccessKey string) (*MinioStorage, error) {
+	client, err := newClient(endpoint, accessKeyID, secretAccessKey)
 	if err != nil {
-		return nil, fmt.Errorf("NewClient(endpoint, accessKeyID, secretAccessKey) err: %w", err)
+		return nil, fmt.Errorf("newClient(endpoint, accessKeyID, secretAccessKey) err: %w", err)
 	}
 
-	return &minioStorage{
+	return &MinioStorage{
 		client: client,
 	}, nil
 }
 
-func (m *minioStorage) UploadFile(ctx context.Context, file *models.File) (*models.File, error) {
-	uploadedFileData, err := m.client.UploadFile(ctx, file.ID, file.Name, file.Name, file.Size,
+func (m *MinioStorage) UploadFile(ctx context.Context, file *models.File) (*models.File, error) {
+	uploadedFileData, err := m.client.uploadFile(ctx, file.ID, file.Name, file.Name, file.Size,
 		bytes.NewBuffer(file.Bytes))
 	if err != nil {
-		return nil, fmt.Errorf("m.client.UploadFile(ctx, %s, %s, %d) err: %w", file.ID, file.ID.String(), file.Size, err)
+		return nil, fmt.Errorf("m.client.uploadFile(ctx, %s, %s, %d) err: %w", file.ID, file.ID.String(), file.Size, err)
 	}
 
 	return uploadedFileData, nil
 }
 
-func (m *minioStorage) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error) {
-	obj, err := m.client.GetFile(ctx, bucketName, fileID)
+func (m *MinioStorage) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error) {
+	obj, err := m.client.getFile(ctx, bucketName, fileID)
 	if err != nil {
-		return nil, fmt.Errorf("m.client.GetFile(ctx, bucketName, fileID) err: %w", err)
+		return nil, fmt.Errorf("m.client.getFile(ctx, bucketName, fileID) err: %w", err)
 	}
 
-	defer obj.Close()
+	defer func(obj *minio.Object) {
+		err := obj.Close()
+		if err != nil {
+			log.Warn("obj.Close() err:", err)
+		}
+	}(obj)
 
 	objectInfo, err := obj.Stat()
 	if err != nil {
@@ -73,17 +78,17 @@ func (m *minioStorage) GetFile(ctx context.Context, bucketName string, fileID uu
 	return &file, nil
 }
 
-func (m *minioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error) {
-	var files []*models.File
-
-	objects, err := m.client.GetBucketFiles(ctx, bucketName)
+func (m *MinioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error) {
+	objects, err := m.client.getBucketFiles(ctx, bucketName)
 	if err != nil {
-		return nil, fmt.Errorf("m.client.GetBucketFiles(ctx, %s) err: %w", bucketName, err)
+		return nil, fmt.Errorf("m.client.getBucketFiles(ctx, %s) err: %w", bucketName, err)
 	}
 
 	if len(objects) == 0 {
 		return nil, models.ErrBucketIsEmpty
 	}
+
+	files := make([]*models.File, len(objects))
 
 	for _, obj := range objects {
 		stat, err := obj.Stat()
@@ -113,6 +118,7 @@ func (m *minioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([
 			Size:  stat.Size,
 			Bytes: buffer,
 		}
+		//nolint:makezero
 		files = append(files, &file)
 		_ = obj.Close()
 	}
@@ -120,10 +126,10 @@ func (m *minioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([
 	return files, nil
 }
 
-func (m *minioStorage) DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error {
-	err := m.client.DeleteFile(ctx, fileID, fileName)
+func (m *MinioStorage) DeleteFile(ctx context.Context, bucketName string, fileName string) error {
+	err := m.client.deleteFile(ctx, bucketName, fileName)
 	if err != nil {
-		return fmt.Errorf("m.client.DeleteFile(ctx, %s, %s) err: %w", fileName, fileName, err)
+		return fmt.Errorf("m.client.deleteFile(ctx, %s, %s) err: %w", fileName, fileName, err)
 	}
 
 	return nil

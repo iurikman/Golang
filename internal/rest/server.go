@@ -90,6 +90,8 @@ func (s *Server) configRouter() {
 		r.Route("/storage", func(r chi.Router) {
 			r.Post("/", s.uploadFile)
 			r.Get("/{id}", s.getFile)
+			r.Get("/getBucketFiles/{bucketName}", s.getBucketFiles)
+			r.Delete("/{id}", s.deleteFile)
 		})
 	})
 }

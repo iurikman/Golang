@@ -254,6 +254,7 @@ func (s *IntegrationTestSuite) TestUsers() {
 				s.Require().Equal(user1.Name, respUserData[2].Name)
 				s.Require().Equal(3, len(respUserData))
 			})
+
 			limit := 10
 
 			offset := 0
@@ -286,6 +287,7 @@ func (s *IntegrationTestSuite) TestUsers() {
 				s.Require().Equal(10, len(respUsersData))
 				s.Require().Equal(newString(strconv.Itoa(68)), respUsersData[0].Name)
 			})
+
 			limit = 10
 			offset = 10
 
@@ -330,7 +332,7 @@ func (s *IntegrationTestSuite) TestUsers() {
 			s.Run("200/StatusOk/newEmail", func() {
 				respUserData := new(models.User)
 
-				newName := newString("newName")
+				newName := newString("newEmail")
 
 				resp := s.sendRequest(
 					context.Background(),

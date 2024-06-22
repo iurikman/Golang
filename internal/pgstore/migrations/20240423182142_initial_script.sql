@@ -14,6 +14,7 @@ CREATE TABLE users (
     phone       varchar,
     email       varchar not null unique,
     user_type   varchar not null,
+    deleted     boolean default false,
     created_at  timestamp with time zone default now(),
     updated_at  timestamp with time zone default now()
 );

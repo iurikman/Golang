@@ -91,6 +91,7 @@ func (s *IntegrationTestSuite) TestCompanies() {
 	s.Run("GET:", func() {
 		s.Run("list with sorting=name and descending=true", func() {
 			var companies []models.Company
+
 			var company models.Company
 
 			params := "?limit=10&sorting=name&descending=true"
