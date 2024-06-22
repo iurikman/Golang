@@ -6,29 +6,20 @@ linters-settings:
   forbidigo:
     forbid:
       - .*\.fatal,*
-      - fmt,Print.*
+      - fmt.Print.*
 
 linters:
   enable-all: true
 
   disable:
-    - deadcode
+    - funlen
     - depguard
     - exhaustive
-    - exhaustivestruct
     - exhaustruct
-    - golint
     - gomnd
-    - ifshort
-    - interfacer
     - ireturn
-    - maligned
-    - nosnakecase
     - varnamelen
-    - structcheck
-    - scopelint
     - tagalign
-    - varcheck
     - wastedassign
 
 run:

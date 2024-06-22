@@ -6,30 +6,62 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
+	store2 "github.com/iurikman/smartSurvey/internal/store"
 )
 
 type store interface {
 	CreateUser(ctx context.Context, user models.User) (*models.User, error)
+	GetUsers(ctx context.Context, params models.GetParams) ([]*models.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, user models.UpdateUserRequest) (*models.User, error)
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	CreateCompany(ctx context.Context, company models.Company) (*models.Company, error)
+	GetCompanies(ctx context.Context, params models.GetParams) ([]*models.Company, error)
 	UpdateCompany(ctx context.Context, company models.Company) (*models.Company, error)
+	// UploadFile(ctx context.Context, file models.File) (*models.File, error)
+	// GetFile(ctx context.Context, file models.File) (*models.File, error)
 }
 
 type Service struct {
-	db store
+	db      store
+	storage store2.Storage
 }
 
-func New(db store) *Service {
+func New(db store, storage store2.Storage) *Service {
 	return &Service{
-		db: db,
+		db:      db,
+		storage: storage,
 	}
 }
 
+func (s *Service) UploadFile(ctx context.Context, fileDTO models.FileDTO) (*models.File, error) {
+	file := models.NewFile(fileDTO)
+
+	uploadedFileData, err := s.storage.UploadFile(ctx, file)
+	if err != nil {
+		return nil, fmt.Errorf("s.storage.UploadFile(ctx, file.ID, bucketName, file) err: %w", err)
+	}
+
+	return uploadedFileData, nil
+}
+
+func (s *Service) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error) {
+	file, err := s.storage.GetFile(ctx, bucketName, fileID)
+	if err != nil {
+		return nil, fmt.Errorf("s.storage.GetFile(ctx, bucketName, fileID) err: %w", err)
+	}
+
+	return file, nil
+}
+
+func (s *Service) DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error {
+	//TODO implement func
+	return nil
+}
+
 func (s *Service) CreateCompany(ctx context.Context, company models.Company) (*models.Company, error) {
-	if company.Name == "" {
-		return nil, fmt.Errorf("name is required: %w", models.ErrCompanyNameIsEmpty)
+	if err := company.Validate(); err != nil {
+		return nil, fmt.Errorf("company.Validate(): %w", err)
 	}
 
 	rCompany, err := s.db.CreateCompany(ctx, company)
@@ -40,9 +72,18 @@ func (s *Service) CreateCompany(ctx context.Context, company models.Company) (*m
 	return rCompany, nil
 }
 
+func (s *Service) GetCompanies(ctx context.Context, params models.GetParams) ([]*models.Company, error) {
+	companies, err := s.db.GetCompanies(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("s.db.GetCompanies(ctx, %v) err: %w", params, err)
+	}
+
+	return companies, nil
+}
+
 func (s *Service) UpdateCompany(ctx context.Context, company models.Company) (*models.Company, error) {
-	if company.Name == "" {
-		return nil, fmt.Errorf("name is required: %w", models.ErrCompanyNameIsEmpty)
+	if err := company.Validate(); err != nil {
+		return nil, fmt.Errorf("company.Validate() err: %w", err)
 	}
 
 	rCompany, err := s.db.UpdateCompany(ctx, company)
@@ -54,16 +95,8 @@ func (s *Service) UpdateCompany(ctx context.Context, company models.Company) (*m
 }
 
 func (s *Service) CreateUser(ctx context.Context, user models.User) (*models.User, error) {
-	if user.Name == "" {
-		return nil, fmt.Errorf("name is required: %w", models.ErrUserNameIsEmpty)
-	}
-
-	if *user.Email == "" {
-		return nil, fmt.Errorf("email is rewuired: %w", models.ErrEmailIsEmpty)
-	}
-
-	if *user.Phone == "" {
-		return nil, fmt.Errorf("phone is empty: %w", models.ErrPhoneIsEmpty)
+	if err := user.Validate(); err != nil {
+		return nil, fmt.Errorf("user.Validate() err: %w", err)
 	}
 
 	rUser, err := s.db.CreateUser(ctx, user)
@@ -72,6 +105,15 @@ func (s *Service) CreateUser(ctx context.Context, user models.User) (*models.Use
 	}
 
 	return rUser, nil
+}
+
+func (s *Service) GetUsers(ctx context.Context, params models.GetParams) ([]*models.User, error) {
+	users, err := s.db.GetUsers(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("s.db.GetUsers() err: %w", err)
+	}
+
+	return users, nil
 }
 
 func (s *Service) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error) {
@@ -84,18 +126,6 @@ func (s *Service) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, 
 }
 
 func (s *Service) UpdateUser(ctx context.Context, id uuid.UUID, user models.UpdateUserRequest) (*models.User, error) {
-	if user.Name == "" {
-		return nil, fmt.Errorf("user name is empty: %w", models.ErrUserNameIsEmpty)
-	}
-
-	if user.Email == "" {
-		return nil, fmt.Errorf("user email is empty: %w", models.ErrEmailIsEmpty)
-	}
-
-	if user.Phone == "" {
-		return nil, fmt.Errorf("user phone is empty: %w", models.ErrPhoneIsEmpty)
-	}
-
 	newUser, err := s.db.UpdateUser(ctx, id, user)
 	if err != nil {
 		return nil, fmt.Errorf("s.db.PatchUser(ctx, user): %w", err)
@@ -105,8 +135,7 @@ func (s *Service) UpdateUser(ctx context.Context, id uuid.UUID, user models.Upda
 }
 
 func (s *Service) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	err := s.db.DeleteUser(ctx, id)
-	if err != nil {
+	if err := s.db.DeleteUser(ctx, id); err != nil {
 		return fmt.Errorf("s.db.DeleteUser(ctx, id): %w", err)
 	}
 

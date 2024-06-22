@@ -71,3 +71,49 @@ func (p *Postgres) UpdateCompany(ctx context.Context, company models.Company) (*
 
 	return &company, nil
 }
+
+func (p *Postgres) GetCompanies(ctx context.Context, params models.GetParams) ([]*models.Company, error) {
+	companies := make([]*models.Company, 0, 1)
+
+	query := `
+		SELECT * FROM companies
+		    `
+
+	if params.Filter != "" {
+		query += fmt.Sprintf(" WHERE name LIKE '%%%s%%'", params.Filter)
+	}
+
+	if params.Sorting != "" {
+		query += " ORDER BY " + params.Sorting
+		if params.Descending {
+			query += " DESC"
+		}
+	}
+
+	query += fmt.Sprintf(" OFFSET %d LIMIT %d", params.Offset, params.Limit)
+
+	rows, err := p.db.Query(
+		ctx,
+		query,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error getting companies: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		company := new(models.Company)
+
+		err := rows.Scan(
+			&company.ID,
+			&company.Name,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error getting companies: %w", err)
+		}
+
+		companies = append(companies, company)
+	}
+
+	return companies, nil
+}

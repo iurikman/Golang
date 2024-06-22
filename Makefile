@@ -17,11 +17,11 @@ test:
 	kill $PID
 
 up:
-	docker-compose up -d
+	docker compose up -d
 
 down:
-	docker-compose down
+	docker compose down
 
 restart:
-	docker-compose down
-	docker-compose up -d
+	docker compose down
+	docker compose up -d
