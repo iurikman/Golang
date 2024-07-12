@@ -22,7 +22,7 @@ type TransferResponse struct {
 	TransactionID uuid.UUID `json:"transactionId"`
 }
 
-type service interface {
+type service interface { //nolint:interfacebloat
 	CreateUser(ctx context.Context, user models.User) (*models.User, error)
 	GetUsers(ctx context.Context, params models.GetParams) ([]*models.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
@@ -41,7 +41,11 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	var file models.File
 
-	_ = json.NewDecoder(r.Body).Decode(&file)
+	if err := json.NewDecoder(r.Body).Decode(&file); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, err.Error())
+
+		return
+	}
 
 	fileDTO := models.FileDTO{
 		Name:   file.Name,
@@ -51,7 +55,8 @@ func (s *Server) uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	uploadedFileData, err := s.service.UploadFile(r.Context(), fileDTO)
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, err.Error())
+		// log
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
 
 		return
 	}
@@ -122,7 +127,8 @@ func (s *Server) getCompanies(w http.ResponseWriter, r *http.Request) {
 
 	companies, err := s.service.GetCompanies(r.Context(), *params)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "s.service.GetCompanies(r.Context(), params)")
+		writeErrorResponse(w, http.StatusInternalServerError, "internal server error")
+		log.Warnf("s.service.GetCompanies(r.Context(), *params): %v", err)
 
 		return
 	}

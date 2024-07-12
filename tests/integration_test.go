@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"testing"
 
-	minio2 "github.com/iurikman/smartSurvey/internal/store/minio"
+	minio2 "github.com/iurikman/smartSurvey/internal/filestore"
 
 	"github.com/iurikman/smartSurvey/internal/jwtgenerator"
 	"github.com/iurikman/smartSurvey/internal/models"
@@ -15,9 +15,9 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/iurikman/smartSurvey/internal/config"
+	"github.com/iurikman/smartSurvey/internal/pgstore"
 	server "github.com/iurikman/smartSurvey/internal/rest"
 	"github.com/iurikman/smartSurvey/internal/service"
-	"github.com/iurikman/smartSurvey/internal/store"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/stretchr/testify/suite"
@@ -33,7 +33,7 @@ const (
 type IntegrationTestSuite struct {
 	suite.Suite
 	cancel         context.CancelFunc
-	pgStore        *store.Postgres
+	pgStore        *pgstore.Postgres
 	service        *service.Service
 	server         *server.Server
 	authToken      string
@@ -54,7 +54,7 @@ func (s *IntegrationTestSuite) SetupSuite() {
 
 	cfg := config.New()
 
-	pgStore, err := store.New(ctx, store.Config{
+	pgStore, err := pgstore.New(ctx, pgstore.Config{
 		PGUser:     cfg.PGUser,
 		PGPassword: cfg.PGPassword,
 		PGHost:     cfg.PGHost,

@@ -1,4 +1,4 @@
-package store
+package pgstore
 
 import (
 	"context"
@@ -117,7 +117,7 @@ func (p *Postgres) GetUserByID(ctx context.Context, id uuid.UUID) (*models.User,
 	query := `
 		SELECT id, company, role, name, surname, phone, email, user_type
 		FROM users
-		WHERE id = $1
+		WHERE NOT deleted AND id = $1
 		`
 
 	err := p.db.QueryRow(
@@ -156,6 +156,8 @@ func (p *Postgres) UpdateUser(ctx context.Context, id uuid.UUID, user models.Upd
 	}
 
 	editedFlag := false
+
+	//TODO склеить всё в 1 запрос
 
 	if user.Company != uuid.Nil {
 		editedFlag = true
@@ -288,7 +290,7 @@ func (p *Postgres) UpdateUser(ctx context.Context, id uuid.UUID, user models.Upd
 
 func (p *Postgres) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	query := `
-		DELETE FROM users
+		UPDATE users SET deleted = true
 		WHERE id = $1
 		`
 

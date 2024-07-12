@@ -1,4 +1,4 @@
-package minio
+package filestore
 
 import (
 	"context"
@@ -28,9 +28,9 @@ type Client struct {
 	logger      log.Logger
 }
 
-func NewClient(endpoint, accesssKeyID, secretAccessKey string) (*Client, error) {
+func newClient(endpoint, accessKeyID, secretAccessKey string) (*Client, error) {
 	minioClient, err := minio.New(endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(accesssKeyID, secretAccessKey, ""),
+		Creds:  credentials.NewStaticV4(accessKeyID, secretAccessKey, ""),
 		Secure: false,
 	})
 	if err != nil {
@@ -40,7 +40,7 @@ func NewClient(endpoint, accesssKeyID, secretAccessKey string) (*Client, error) 
 	return &Client{minioClient: minioClient}, nil
 }
 
-func (c *Client) UploadFile(ctx context.Context, fileID uuid.UUID, fileName string, bucketName string,
+func (c *Client) uploadFile(ctx context.Context, fileID uuid.UUID, fileName string, bucketName string,
 	fileSize int64, reader io.Reader,
 ) (*models.File, error) {
 	var uploadedFileData models.File
@@ -88,7 +88,7 @@ func (c *Client) UploadFile(ctx context.Context, fileID uuid.UUID, fileName stri
 	return &uploadedFileData, nil
 }
 
-func (c *Client) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*minio.Object, error) {
+func (c *Client) getFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*minio.Object, error) {
 	obj, err := c.minioClient.GetObject(ctx, bucketName, fileID.String(), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("c.minioClient.GetObject(...) err: %w", err)
@@ -98,6 +98,7 @@ func (c *Client) GetFile(ctx context.Context, bucketName string, fileID uuid.UUI
 }
 
 func (c *Client) GetBucketFiles(ctx context.Context, bucketName string) ([]*minio.Object, error) {
+	//nolint:prealloc
 	var bucketFiles []*minio.Object
 
 	reqCtx, cancel := context.WithTimeout(ctx, ctxTimeout)

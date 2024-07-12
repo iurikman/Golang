@@ -50,6 +50,7 @@ type UpdateUserRequest struct {
 	UserType *string   `json:"userType,omitempty"`
 }
 
+// TODO remove nilable fields
 type User struct {
 	ID       uuid.UUID `json:"id"`
 	Company  uuid.UUID `json:"company,omitempty"`
@@ -85,6 +86,7 @@ type Claims struct {
 	UUID uuid.UUID `json:"uuid"`
 }
 
+// TODO move to rest package
 func ParseParams(value url.Values) (*GetParams, error) {
 	decoder := schema.NewDecoder()
 

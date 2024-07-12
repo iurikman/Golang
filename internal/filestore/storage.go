@@ -1,4 +1,4 @@
-package minio
+package filestore
 
 import (
 	"bytes"
@@ -9,27 +9,26 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
-	"github.com/iurikman/smartSurvey/internal/store"
 	log "github.com/sirupsen/logrus"
 )
 
-type minioStorage struct {
+type MinioStorage struct {
 	client *Client
 }
 
-func NewMinioStorage(endpoint, accessKeyID, secretAccessKey string) (store.Storage, error) {
-	client, err := NewClient(endpoint, accessKeyID, secretAccessKey)
+func NewMinioStorage(endpoint, accessKeyID, secretAccessKey string) (*MinioStorage, error) {
+	client, err := newClient(endpoint, accessKeyID, secretAccessKey)
 	if err != nil {
-		return nil, fmt.Errorf("NewClient(endpoint, accessKeyID, secretAccessKey) err: %w", err)
+		return nil, fmt.Errorf("newClient(endpoint, accessKeyID, secretAccessKey) err: %w", err)
 	}
 
-	return &minioStorage{
+	return &MinioStorage{
 		client: client,
 	}, nil
 }
 
-func (m *minioStorage) UploadFile(ctx context.Context, file *models.File) (*models.File, error) {
-	uploadedFileData, err := m.client.UploadFile(ctx, file.ID, file.Name, file.Name, file.Size,
+func (m *MinioStorage) UploadFile(ctx context.Context, file *models.File) (*models.File, error) {
+	uploadedFileData, err := m.client.uploadFile(ctx, file.ID, file.Name, file.Name, file.Size,
 		bytes.NewBuffer(file.Bytes))
 	if err != nil {
 		return nil, fmt.Errorf("m.client.UploadFile(ctx, %s, %s, %d) err: %w", file.ID, file.ID.String(), file.Size, err)
@@ -38,10 +37,10 @@ func (m *minioStorage) UploadFile(ctx context.Context, file *models.File) (*mode
 	return uploadedFileData, nil
 }
 
-func (m *minioStorage) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error) {
-	obj, err := m.client.GetFile(ctx, bucketName, fileID)
+func (m *MinioStorage) GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error) {
+	obj, err := m.client.getFile(ctx, bucketName, fileID)
 	if err != nil {
-		return nil, fmt.Errorf("m.client.GetFile(ctx, bucketName, fileID) err: %w", err)
+		return nil, fmt.Errorf("m.client.getFile(ctx, bucketName, fileID) err: %w", err)
 	}
 
 	defer obj.Close()
@@ -73,9 +72,7 @@ func (m *minioStorage) GetFile(ctx context.Context, bucketName string, fileID uu
 	return &file, nil
 }
 
-func (m *minioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error) {
-	var files []*models.File
-
+func (m *MinioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error) {
 	objects, err := m.client.GetBucketFiles(ctx, bucketName)
 	if err != nil {
 		return nil, fmt.Errorf("m.client.GetBucketFiles(ctx, %s) err: %w", bucketName, err)
@@ -84,6 +81,8 @@ func (m *minioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([
 	if len(objects) == 0 {
 		return nil, models.ErrBucketIsEmpty
 	}
+
+	files := make([]*models.File, 0, len(objects))
 
 	for _, obj := range objects {
 		stat, err := obj.Stat()
@@ -120,7 +119,7 @@ func (m *minioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([
 	return files, nil
 }
 
-func (m *minioStorage) DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error {
+func (m *MinioStorage) DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error {
 	err := m.client.DeleteFile(ctx, fileID, fileName)
 	if err != nil {
 		return fmt.Errorf("m.client.DeleteFile(ctx, %s, %s) err: %w", fileName, fileName, err)

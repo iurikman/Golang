@@ -6,12 +6,12 @@ import (
 	"syscall"
 
 	"github.com/iurikman/smartSurvey/internal/config"
+	minio2 "github.com/iurikman/smartSurvey/internal/filestore"
 	"github.com/iurikman/smartSurvey/internal/jwtgenerator"
 	"github.com/iurikman/smartSurvey/internal/logger"
+	"github.com/iurikman/smartSurvey/internal/pgstore"
 	server "github.com/iurikman/smartSurvey/internal/rest"
 	"github.com/iurikman/smartSurvey/internal/service"
-	"github.com/iurikman/smartSurvey/internal/store"
-	minio2 "github.com/iurikman/smartSurvey/internal/store/minio"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	migrate "github.com/rubenv/sql-migrate"
 	log "github.com/sirupsen/logrus"
@@ -25,7 +25,7 @@ func main() {
 
 	cfg := config.New()
 
-	pgStore, err := store.New(ctx, store.Config{
+	pgStore, err := pgstore.New(ctx, pgstore.Config{
 		PGUser:     cfg.PGUser,
 		PGPassword: cfg.PGPassword,
 		PGHost:     cfg.PGHost,

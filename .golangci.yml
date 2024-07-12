@@ -14,6 +14,7 @@ linters:
   disable:
     - funlen
     - depguard
+    - execinquery
     - exhaustive
     - exhaustruct
     - gomnd

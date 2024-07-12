@@ -6,10 +6,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
-	store2 "github.com/iurikman/smartSurvey/internal/store"
 )
 
-type store interface {
+type db interface {
 	CreateUser(ctx context.Context, user models.User) (*models.User, error)
 	GetUsers(ctx context.Context, params models.GetParams) ([]*models.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*models.User, error)
@@ -22,12 +21,19 @@ type store interface {
 	// GetFile(ctx context.Context, file models.File) (*models.File, error)
 }
 
-type Service struct {
-	db      store
-	storage store2.Storage
+type fileStore interface {
+	GetFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*models.File, error)
+	GetBucketFiles(ctx context.Context, bucketName string) ([]*models.File, error)
+	UploadFile(ctx context.Context, file *models.File) (*models.File, error)
+	DeleteFile(ctx context.Context, fileID uuid.UUID, fileName string) error
 }
 
-func New(db store, storage store2.Storage) *Service {
+type Service struct {
+	db      db
+	storage fileStore
+}
+
+func New(db db, storage fileStore) *Service {
 	return &Service{
 		db:      db,
 		storage: storage,
