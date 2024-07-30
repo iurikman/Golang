@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/iurikman/smartSurvey/internal/models"
-	"github.com/minio/minio-go/v7"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,12 +43,12 @@ func (m *MinioStorage) GetFile(ctx context.Context, bucketName string, fileID uu
 		return nil, fmt.Errorf("m.client.getFile(ctx, bucketName, fileID) err: %w", err)
 	}
 
-	defer func(obj *minio.Object) {
+	defer func() {
 		err := obj.Close()
 		if err != nil {
 			log.Warn("obj.Close() err:", err)
 		}
-	}(obj)
+	}()
 
 	objectInfo, err := obj.Stat()
 	if err != nil {
@@ -93,23 +92,19 @@ func (m *MinioStorage) GetBucketFiles(ctx context.Context, bucketName string) ([
 	for _, obj := range objects {
 		stat, err := obj.Stat()
 		if err != nil {
-			log.Errorf("obj.Stat() err: %v", err)
-
-			continue
+			return nil, fmt.Errorf("obj.Stat() err: %w", err)
 		}
 
 		buffer := make([]byte, stat.Size)
 
 		_, err = obj.Read(buffer)
-		if err != nil || errors.Is(err, io.EOF) {
-			log.Errorf("obj.Read() err: %v", err)
-
-			continue
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("obj.Read() err: %w", err)
 		}
 
-		id, err := uuid.Parse(stat.UserMetadata["ID"])
+		id, err := uuid.Parse(stat.Key)
 		if err != nil {
-			log.Warnf("uuid.Parse(\"%s\") err: %v", stat.UserMetadata["ID"], err)
+			return nil, fmt.Errorf("uuid.Parse() err: %w", err)
 		}
 
 		file := models.File{
