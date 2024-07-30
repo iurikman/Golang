@@ -89,9 +89,8 @@ func (c *Client) uploadFile(ctx context.Context, fileID uuid.UUID, fileName stri
 }
 
 func (c *Client) getFile(ctx context.Context, bucketName string, fileID uuid.UUID) (*minio.Object, error) {
-	//reqCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
-	//defer cancel()
-
+	// reqCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
+	// defer cancel()
 	obj, err := c.minioClient.GetObject(ctx, bucketName, fileID.String(), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("c.minioClient.GetObject(...) err: %w", err)
@@ -103,8 +102,10 @@ func (c *Client) getFile(ctx context.Context, bucketName string, fileID uuid.UUI
 func (c *Client) getBucketFiles(ctx context.Context, bucketName string) ([]*minio.Object, error) {
 	//nolint:prealloc
 	var bucketFiles []*minio.Object
+
 	reqCtx, cancel := context.WithTimeout(ctx, ctxTimeout)
 	defer cancel()
+
 	objects := c.minioClient.ListObjects(reqCtx, bucketName, minio.ListObjectsOptions{WithMetadata: true})
 
 	for obj := range objects {
@@ -117,11 +118,10 @@ func (c *Client) getBucketFiles(ctx context.Context, bucketName string) ([]*mini
 			return nil, fmt.Errorf("c.minioClient.GetObject(...) err: %w", err)
 		}
 
-		info, err := object.Stat()
+		_, err = object.Stat()
 		if err != nil {
 			return nil, fmt.Errorf("object.Stat(): %w", err)
 		}
-		_ = info
 
 		bucketFiles = append(bucketFiles, object)
 	}
