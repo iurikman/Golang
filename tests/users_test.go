@@ -327,91 +327,91 @@ func (s *IntegrationTestSuite) TestUsers() {
 				s.Require().Equal("121314", *respUsersData[4].Name+*respUsersData[5].Name+*respUsersData[6].Name)
 			})
 		})
+	})
 
-		s.Run("PATCH:", func() {
-			s.Run("200/StatusOk/newEmail", func() {
-				respUserData := new(models.User)
+	s.Run("PATCH:", func() {
+		s.Run("200/StatusOk/newEmail", func() {
+			respUserData := new(models.User)
 
-				newName := newString("newEmail")
+			newName := newString("newEmail")
 
-				resp := s.sendRequest(
-					context.Background(),
-					http.MethodPatch,
-					usersEndpoint+"/"+user1.ID.String(),
-					models.UpdateUserRequest{Email: newName},
-					&server.HTTPResponse{Data: &respUserData},
-				)
-				s.Require().Equal(http.StatusOK, resp.StatusCode)
-				s.Require().Equal(newName, respUserData.Email)
-			})
-
-			s.Run("200/StatusOk/newName newRole", func() {
-				respUserData := new(models.User)
-
-				newName := newString("newName2")
-				newRole := newString("newRole")
-
-				resp := s.sendRequest(
-					context.Background(),
-					http.MethodPatch,
-					usersEndpoint+"/"+user2.ID.String(),
-					models.UpdateUserRequest{Name: newName, Role: newRole},
-					&server.HTTPResponse{Data: &respUserData},
-				)
-				s.Require().Equal(http.StatusOK, resp.StatusCode)
-				s.Require().Equal(newRole, respUserData.Role)
-				s.Require().Equal(newName, respUserData.Name)
-			})
-
-			s.Run("400/StatusBadRequest/emptyRequest", func() {
-				respUserData := new(models.User)
-
-				resp := s.sendRequest(
-					context.Background(),
-					http.MethodPatch,
-					usersEndpoint+"/"+user2.ID.String(),
-					models.UpdateUserRequest{},
-					&server.HTTPResponse{Data: &respUserData},
-				)
-				s.Require().Equal(http.StatusBadRequest, resp.StatusCode)
-			})
-
-			s.Run("404/StatusNotFound/not found", func() {
-				var respUserData models.User
-				resp := s.sendRequest(
-					context.Background(),
-					http.MethodPatch,
-					usersEndpoint+"/"+uuid.New().String(),
-					user3,
-					&server.HTTPResponse{Data: &respUserData},
-				)
-				s.Require().Equal(http.StatusNotFound, resp.StatusCode)
-			})
+			resp := s.sendRequest(
+				context.Background(),
+				http.MethodPatch,
+				usersEndpoint+"/"+user1.ID.String(),
+				models.UpdateUserRequest{Email: newName},
+				&server.HTTPResponse{Data: &respUserData},
+			)
+			s.Require().Equal(http.StatusOK, resp.StatusCode)
+			s.Require().Equal(newName, respUserData.Email)
 		})
 
-		s.Run("DELETE:", func() {
-			s.Run("404/not found", func() {
-				var respUserData models.User
-				resp := s.sendRequest(
-					context.Background(),
-					http.MethodDelete,
-					usersEndpoint+"/"+uuid.New().String(),
-					user3,
-					&server.HTTPResponse{Data: &respUserData},
-				)
-				s.Require().Equal(http.StatusNotFound, resp.StatusCode)
-			})
+		s.Run("200/StatusOk/newName newRole", func() {
+			respUserData := new(models.User)
 
-			s.Run("204/StatusNoContent", func() {
-				resp := s.sendRequest(
-					context.Background(),
-					http.MethodDelete,
-					usersEndpoint+"/"+user2.ID.String(),
-					nil,
-					nil,
-				)
-				s.Require().Equal(http.StatusNoContent, resp.StatusCode)
-			})
+			newName := newString("newName2")
+			newRole := newString("newRole")
+
+			resp := s.sendRequest(
+				context.Background(),
+				http.MethodPatch,
+				usersEndpoint+"/"+user2.ID.String(),
+				models.UpdateUserRequest{Name: newName, Role: newRole},
+				&server.HTTPResponse{Data: &respUserData},
+			)
+			s.Require().Equal(http.StatusOK, resp.StatusCode)
+			s.Require().Equal(newRole, respUserData.Role)
+			s.Require().Equal(newName, respUserData.Name)
+		})
+
+		s.Run("400/StatusBadRequest/emptyRequest", func() {
+			respUserData := new(models.User)
+
+			resp := s.sendRequest(
+				context.Background(),
+				http.MethodPatch,
+				usersEndpoint+"/"+user2.ID.String(),
+				models.UpdateUserRequest{},
+				&server.HTTPResponse{Data: &respUserData},
+			)
+			s.Require().Equal(http.StatusBadRequest, resp.StatusCode)
+		})
+
+		s.Run("404/StatusNotFound/not found", func() {
+			var respUserData models.User
+			resp := s.sendRequest(
+				context.Background(),
+				http.MethodPatch,
+				usersEndpoint+"/"+uuid.New().String(),
+				user3,
+				&server.HTTPResponse{Data: &respUserData},
+			)
+			s.Require().Equal(http.StatusNotFound, resp.StatusCode)
+		})
+	})
+
+	s.Run("DELETE:", func() {
+		s.Run("404/not found", func() {
+			var respUserData models.User
+			resp := s.sendRequest(
+				context.Background(),
+				http.MethodDelete,
+				usersEndpoint+"/"+uuid.New().String(),
+				user3,
+				&server.HTTPResponse{Data: &respUserData},
+			)
+			s.Require().Equal(http.StatusNotFound, resp.StatusCode)
+		})
+
+		s.Run("204/StatusNoContent", func() {
+			resp := s.sendRequest(
+				context.Background(),
+				http.MethodDelete,
+				usersEndpoint+"/"+user2.ID.String(),
+				nil,
+				nil,
+			)
+			s.Require().Equal(http.StatusNoContent, resp.StatusCode)
 		})
 	})
 }
