@@ -1,4 +1,4 @@
-package store
+package pgstore
 
 import (
 	"context"
@@ -96,6 +96,17 @@ func (p *Postgres) Migrate(direction migrate.MigrationDirection) error {
 	_, err = migrate.Exec(conn, "postgres", asset, direction)
 	if err != nil {
 		return fmt.Errorf("migrate.Exec: %w", err)
+	}
+
+	return nil
+}
+
+func (p *Postgres) Truncate(ctx context.Context, tables ...string) error {
+	for _, table := range tables {
+		_, err := p.db.Exec(ctx, "DELETE FROM"+" "+table)
+		if err != nil {
+			return fmt.Errorf("truncate: %w", err)
+		}
 	}
 
 	return nil

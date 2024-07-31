@@ -9,3 +9,21 @@ services:
       POSTGRES_PASSWORD: qwerqwer
     ports:
       - "5432:5432"
+
+  minio:
+    image: quay.io/minio/minio
+    command: server /data --console-address ":9090"
+    restart: always
+    ports:
+      - 9000:9000
+      - 9090:9090
+    volumes:
+      - ~/filestore/data:/data
+    environment:
+      - MINIO_ROOT_USER=minio
+      - MINIO_ROOT_PASSWORD=qwerqwer
+    networks:
+      - minio_net
+
+networks:
+  minio_net:
